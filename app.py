@@ -243,6 +243,17 @@ def metrics_row(metrics: Iterable[tuple[str, str | int]]) -> None:
         column.metric(label, value)
 
 
+def integer_input(label: str, key: str, *, placeholder: str = "Digite um numero inteiro") -> int | None:
+    raw_value = st.text_input(label, value="", key=key, placeholder=placeholder)
+    if not raw_value.strip():
+        return None
+    try:
+        return int(raw_value.strip())
+    except ValueError:
+        st.error("Digite um numero inteiro valido.")
+        return None
+
+
 def render_operation_log() -> None:
     entries = st.session_state.operation_log
     if not entries:
@@ -333,26 +344,85 @@ def render_bst(snapshot: list[tuple[int, int | None, int | None]]) -> None:
         st.info("A arvore esta vazia. Insira valores inteiros para criar os nos.")
         return
 
-    node_ids = {value: f"node_{index}" for index, (value, _, _) in enumerate(snapshot)}
-    lines = [
-        "digraph BST {",
-        "rankdir=TB;",
-        "bgcolor=\"transparent\";",
-        "node [shape=circle, style=filled, fontname=\"Arial\", fillcolor=\"#EFF6FF\", color=\"#3B82F6\", penwidth=1.5];",
-        "edge [color=\"#64748B\", penwidth=1.6];",
+    nodes = {value: (left, right) for value, left, right in snapshot}
+    children: set[int] = set()
+    for _, left, right in snapshot:
+        if left is not None:
+            children.add(left)
+        if right is not None:
+            children.add(right)
+
+    root_value = next((value for value, _, _ in snapshot if value not in children), snapshot[0][0])
+
+    inorder_positions: dict[int, int] = {}
+    depth_by_value: dict[int, int] = {}
+    ordered_values: list[int] = []
+
+    def walk(value: int, depth: int) -> None:
+        depth_by_value[value] = depth
+        left, right = nodes[value]
+        if left is not None:
+            walk(left, depth + 1)
+        inorder_positions[value] = len(ordered_values)
+        ordered_values.append(value)
+        if right is not None:
+            walk(right, depth + 1)
+
+    walk(root_value, 0)
+
+    node_count = len(snapshot)
+    max_depth = max(depth_by_value.values(), default=0)
+    horizontal_gap = 120
+    vertical_gap = 110
+    node_diameter = 42
+    margin_x = 28
+    margin_y = 28
+    canvas_width = max(320, margin_x * 2 + max(0, node_count - 1) * horizontal_gap)
+    canvas_height = max(220, margin_y * 2 + max_depth * vertical_gap + node_diameter)
+
+    positions: dict[int, tuple[float, float]] = {}
+    for value in ordered_values:
+        x = margin_x + inorder_positions[value] * horizontal_gap
+        y = margin_y + depth_by_value[value] * vertical_gap
+        positions[value] = (x, y)
+
+    svg_parts = [
+        f"<svg class='bst-svg' xmlns='http://www.w3.org/2000/svg' viewBox='0 0 {canvas_width} {canvas_height}' preserveAspectRatio='xMidYMid meet' role='img' aria-label='Arvore binaria de busca'>",
+        f"<rect width='{canvas_width}' height='{canvas_height}' fill='white' opacity='0' />",
     ]
 
-    for value, _, _ in snapshot:
-        lines.append(f"{node_ids[value]} [label=\"{value}\"];")
-
     for value, left, right in snapshot:
-        if left is not None:
-            lines.append(f"{node_ids[value]} -> {node_ids[left]};")
-        if right is not None:
-            lines.append(f"{node_ids[value]} -> {node_ids[right]};")
+        x1, y1 = positions[value]
+        parent_x = x1 + node_diameter / 2
+        parent_y = y1 + node_diameter / 2
+        for child_value in (left, right):
+            if child_value is None:
+                continue
+            x2, y2 = positions[child_value]
+            child_x = x2 + node_diameter / 2
+            child_y = y2 + node_diameter / 2
+            svg_parts.append(
+                f"<line x1='{parent_x}' y1='{parent_y + node_diameter / 2 - 1}' "
+                f"x2='{child_x}' y2='{child_y - node_diameter / 2 + 1}' stroke='#64748B' stroke-width='2' />"
+            )
 
-    lines.append("}")
-    st.graphviz_chart("\n".join(lines), width="stretch")
+    for value in ordered_values:
+        x, y = positions[value]
+        center_x = x + node_diameter / 2
+        center_y = y + node_diameter / 2
+        svg_parts.append(
+            f"<g><circle cx='{center_x}' cy='{center_y}' r='{node_diameter / 2}' fill='#EFF6FF' stroke='#3B82F6' stroke-width='2' />"
+            f"<text x='{center_x}' y='{center_y + 5}' text-anchor='middle' font-family='Arial' font-size='14' font-weight='700' fill='#0F172A'>{html.escape(str(value))}</text></g>"
+        )
+
+    svg_parts.append("</svg>")
+
+    st.markdown(
+        "<div class='visual-shell bst-shell' style='overflow-x:auto;'>"
+        f"<div style='min-width:{canvas_width}px; width:{canvas_width}px; margin:0 auto;'>{''.join(svg_parts)}</div>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
 
 
 def page_intro(title: str, subtitle: str, structure_key: str | None = None) -> None:
@@ -385,19 +455,16 @@ def show_stack_and_queue() -> None:
 
     if selected == "Pilha":
         stack = st.session_state.stack
-        values = list(stack.values())
-        top_value = stack.top() if not stack.empty() else "vazia"
-        min_value = stack.min_value() if not stack.empty() else "-"
-        max_value = stack.max_value() if not stack.empty() else "-"
 
         left, right = st.columns([1.05, 1.95], gap="large")
         with left:
             st.subheader("Operacoes")
             with st.form("stack_push_form", clear_on_submit=True):
-                value = st.number_input("Valor para push", value=0, step=1, key="stack_push_value")
+                value = integer_input("Valor para push", "stack_push_value", placeholder="Ex: 99")
                 submitted = st.form_submit_button("Executar push", width="stretch")
             if submitted:
-                execute_operation("stack", f"push({int(value)}) executado no topo.", lambda: stack.push(int(value)))
+                if value is not None:
+                    execute_operation("stack", f"push({value}) executado no topo.", lambda: stack.push(value))
 
             first, second, third = st.columns(3)
             if first.button("Pop", width="stretch", key="stack_pop"):
@@ -410,6 +477,11 @@ def show_stack_and_queue() -> None:
                     st.caption(f"Topo atual: {result}")
             if third.button("Limpar", width="stretch", key="stack_clear"):
                 execute_operation("stack", "Pilha limpa.", stack.clear)
+
+            values = list(stack.values())
+            top_value = stack.top() if not stack.empty() else "vazia"
+            min_value = stack.min_value() if not stack.empty() else "-"
+            max_value = stack.max_value() if not stack.empty() else "-"
 
             st.markdown("#### Medidas calculadas no C++")
             metrics_row(
@@ -433,20 +505,16 @@ def show_stack_and_queue() -> None:
 
     else:
         queue = st.session_state.queue
-        values = list(queue.values())
-        front_value = queue.front() if not queue.empty() else "vazia"
-        back_value = queue.back() if not queue.empty() else "vazia"
-        min_value = queue.min_value() if not queue.empty() else "-"
-        max_value = queue.max_value() if not queue.empty() else "-"
 
         left, right = st.columns([1.05, 1.95], gap="large")
         with left:
             st.subheader("Operacoes")
             with st.form("queue_enqueue_form", clear_on_submit=True):
-                value = st.number_input("Valor para enqueue", value=0, step=1, key="queue_enqueue_value")
+                value = integer_input("Valor para enqueue", "queue_enqueue_value", placeholder="Ex: 42")
                 submitted = st.form_submit_button("Executar enqueue", width="stretch")
             if submitted:
-                execute_operation("queue", f"enqueue({int(value)}) executado no fim.", lambda: queue.enqueue(int(value)))
+                if value is not None:
+                    execute_operation("queue", f"enqueue({value}) executado no fim.", lambda: queue.enqueue(value))
 
             first, second, third = st.columns(3)
             if first.button("Dequeue", width="stretch", key="queue_dequeue"):
@@ -461,6 +529,12 @@ def show_stack_and_queue() -> None:
                     st.caption(f"Inicio: {result[0]} | Fim: {result[1]}")
             if third.button("Limpar", width="stretch", key="queue_clear"):
                 execute_operation("queue", "Fila limpa.", queue.clear)
+
+            values = list(queue.values())
+            front_value = queue.front() if not queue.empty() else "vazia"
+            back_value = queue.back() if not queue.empty() else "vazia"
+            min_value = queue.min_value() if not queue.empty() else "-"
+            max_value = queue.max_value() if not queue.empty() else "-"
 
             st.markdown("#### Medidas calculadas no C++")
             metrics_row(
@@ -498,25 +572,27 @@ def show_linked_list() -> None:
         with insertion_tab:
             with st.form("list_insert_form", clear_on_submit=True):
                 mode = st.selectbox("Modo de insercao", ["Inicio", "Fim", "Indice"])
-                value = st.number_input("Valor", value=0, step=1, key="list_insert_value")
+                value = integer_input("Valor", "list_insert_value", placeholder="Ex: 7")
                 index = st.number_input(
                     "Indice", min_value=0, value=0, step=1, key="list_insert_index",
                     help="Use um indice entre 0 e o tamanho atual da lista.",
                 )
                 submitted = st.form_submit_button("Inserir", width="stretch")
             if submitted:
-                if mode == "Inicio":
+                if value is None:
+                    pass
+                elif mode == "Inicio":
                     execute_operation(
-                        "list", f"Insercao de {int(value)} no inicio.", lambda: linked_list.push_front(int(value))
+                        "list", f"Insercao de {value} no inicio.", lambda: linked_list.push_front(value)
                     )
                 elif mode == "Fim":
                     execute_operation(
-                        "list", f"Insercao de {int(value)} no fim.", lambda: linked_list.push_back(int(value))
+                        "list", f"Insercao de {value} no fim.", lambda: linked_list.push_back(value)
                     )
                 else:
                     execute_operation(
-                        "list", f"Insercao de {int(value)} no indice {int(index)}.",
-                        lambda: linked_list.insert_at(int(index), int(value)),
+                        "list", f"Insercao de {value} no indice {int(index)}.",
+                        lambda: linked_list.insert_at(int(index), value),
                     )
 
         with removal_tab:
@@ -525,14 +601,14 @@ def show_linked_list() -> None:
                     "Modo de remocao",
                     ["Primeira ocorrencia", "Por indice", "Todas as ocorrencias"],
                 )
-                value = st.number_input("Valor para remocao", value=0, step=1, key="list_remove_value")
+                value = integer_input("Valor para remocao", "list_remove_value", placeholder="Ex: 12")
                 index = st.number_input("Indice para remocao", min_value=0, value=0, step=1, key="list_remove_index")
                 submitted = st.form_submit_button("Remover", width="stretch")
             if submitted:
-                if mode == "Primeira ocorrencia":
+                if mode == "Primeira ocorrencia" and value is not None:
                     removed = execute_operation(
-                        "list", f"Busca e remocao da primeira ocorrencia de {int(value)}.",
-                        lambda: linked_list.remove_first(int(value)),
+                        "list", f"Busca e remocao da primeira ocorrencia de {value}.",
+                        lambda: linked_list.remove_first(value),
                     )
                     if removed is False:
                         st.warning("O valor nao foi encontrado na lista.")
@@ -544,24 +620,25 @@ def show_linked_list() -> None:
                         st.caption(f"Valor removido: {removed}")
                 else:
                     count = execute_operation(
-                        "list", f"Remocao de todas as ocorrencias de {int(value)}.",
-                        lambda: linked_list.remove_all(int(value)),
+                        "list", f"Remocao de todas as ocorrencias de {value}.",
+                        lambda: linked_list.remove_all(value),
                     )
                     if count is not None:
                         st.caption(f"Ocorrencias removidas: {count}")
 
             with st.form("list_search_form", clear_on_submit=True):
-                value = st.number_input("Valor para busca", value=0, step=1, key="list_search_value")
+                value = integer_input("Valor para busca", "list_search_value", placeholder="Ex: 23")
                 searched = st.form_submit_button("Buscar", width="stretch")
             if searched:
-                position = execute_operation(
-                    "list", f"Busca de {int(value)} executada.", lambda: linked_list.find(int(value))
-                )
-                if position is not None:
-                    if position >= 0:
-                        st.success(f"Valor encontrado no indice {position}.")
-                    else:
-                        st.info("Valor nao encontrado.")
+                if value is not None:
+                    position = execute_operation(
+                        "list", f"Busca de {value} executada.", lambda: linked_list.find(value)
+                    )
+                    if position is not None:
+                        if position >= 0:
+                            st.success(f"Valor encontrado no indice {position}.")
+                        else:
+                            st.info("Valor nao encontrado.")
 
         with auxiliary_tab:
             first, second = st.columns(2)
@@ -597,36 +674,39 @@ def show_bst() -> None:
     controls, visualization = st.columns([1.05, 1.95], gap="large")
     with controls:
         with st.form("bst_insert_form", clear_on_submit=True):
-            value = st.number_input("Valor para insercao", value=0, step=1, key="bst_insert_value")
+            value = integer_input("Valor para insercao", "bst_insert_value", placeholder="Ex: 50")
             inserted = st.form_submit_button("Inserir no", width="stretch")
         if inserted:
-            result = execute_operation("bst", f"Tentativa de insercao de {int(value)}.", lambda: bst.insert(int(value)))
-            if result is True:
-                st.success(f"No {int(value)} inserido com sucesso.")
-            elif result is False:
-                st.warning("Valores duplicados nao sao inseridos na arvore.")
+            if value is not None:
+                result = execute_operation("bst", f"Tentativa de insercao de {value}.", lambda: bst.insert(value))
+                if result is True:
+                    st.success(f"No {value} inserido com sucesso.")
+                elif result is False:
+                    st.warning("Valores duplicados nao sao inseridos na arvore.")
 
         first, second = st.columns(2)
         with first:
             with st.form("bst_remove_form", clear_on_submit=True):
-                value = st.number_input("Valor para remocao", value=0, step=1, key="bst_remove_value")
+                value = integer_input("Valor para remocao", "bst_remove_value", placeholder="Ex: 50")
                 removed = st.form_submit_button("Remover", width="stretch")
             if removed:
-                result = execute_operation("bst", f"Tentativa de remocao de {int(value)}.", lambda: bst.remove(int(value)))
-                if result is True:
-                    st.success(f"No {int(value)} removido com sucesso.")
-                elif result is False:
-                    st.warning("O valor informado nao esta na arvore.")
+                if value is not None:
+                    result = execute_operation("bst", f"Tentativa de remocao de {value}.", lambda: bst.remove(value))
+                    if result is True:
+                        st.success(f"No {value} removido com sucesso.")
+                    elif result is False:
+                        st.warning("O valor informado nao esta na arvore.")
         with second:
             with st.form("bst_search_form", clear_on_submit=True):
-                value = st.number_input("Valor para busca", value=0, step=1, key="bst_search_value")
+                value = integer_input("Valor para busca", "bst_search_value", placeholder="Ex: 50")
                 searched = st.form_submit_button("Buscar", width="stretch")
             if searched:
-                found = execute_operation("bst", f"Busca de {int(value)} executada.", lambda: bst.contains(int(value)))
-                if found is True:
-                    st.success("No encontrado na arvore.")
-                elif found is False:
-                    st.info("No nao encontrado na arvore.")
+                if value is not None:
+                    found = execute_operation("bst", f"Busca de {value} executada.", lambda: bst.contains(value))
+                    if found is True:
+                        st.success("No encontrado na arvore.")
+                    elif found is False:
+                        st.info("No nao encontrado na arvore.")
 
         if st.button("Limpar arvore", width="stretch", key="bst_clear"):
             execute_operation("bst", "Arvore limpa.", bst.clear)
