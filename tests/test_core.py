@@ -7,12 +7,15 @@ import pytest
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 BUILD_DIR = ROOT_DIR / "build"
+sys.path.insert(0, str(ROOT_DIR))
 sys.path.insert(0, str(BUILD_DIR))
 
 try:
     import ds_core
 except ImportError as error:  # pragma: no cover
     raise RuntimeError("Compile o modulo C++ antes de executar os testes.") from error
+
+import app
 
 
 def test_stack_lifo_and_statistics() -> None:
@@ -115,3 +118,22 @@ def test_bst_snapshot_exposes_relationships() -> None:
     assert snapshot[0] == (5, 3, 8)
     assert snapshot[1] == (3, None, None)
     assert snapshot[2] == (8, None, None)
+
+
+def test_bst_render_uses_all_nodes_and_edges(monkeypatch: pytest.MonkeyPatch) -> None:
+    tree = ds_core.BinarySearchTree()
+    for value in [8, 4, 12, 2, 6, 10, 14]:
+        tree.insert(value)
+
+    rendered: list[str] = []
+    monkeypatch.setattr(app.st, "markdown", lambda body, unsafe_allow_html=True: rendered.append(body))
+
+    app.render_bst(list(tree.snapshot()))
+
+    assert len(rendered) == 1
+    svg = rendered[0]
+    assert svg.count("<circle ") == 7
+    assert svg.count("<line ") == 6
+    assert "aria-label='Arvore binaria de busca'" in svg
+    for value in [8, 4, 12, 2, 6, 10, 14]:
+        assert f">{value}<" in svg
