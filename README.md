@@ -60,19 +60,6 @@ interactive-data-structures-simulator/
     └── demo_video_script.md        # Roteiro de video de ate 3 minutos
 ```
 
-## Execucao no GitHub Codespaces
-
-1. Envie esta pasta para um repositorio Git no GitHub.
-2. No repositorio, selecione **Code > Codespaces > Create codespace on main**.
-3. Aguarde o `postCreateCommand`. Ele instala as dependencias e compila o modulo C++ automaticamente.
-4. No terminal integrado, execute:
-
-```bash
-bash scripts/run.sh
-```
-
-5. Quando o Codespaces encaminhar a porta 8501, abra o endereco fornecido no navegador.
-
 ## Execucao manual em Linux ou macOS
 
 ### 1. Criar e ativar ambiente virtual
