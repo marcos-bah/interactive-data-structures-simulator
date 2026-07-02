@@ -1,0 +1,25 @@
+Links utilizados ou referenciados no projeto
+
+1. Streamlit
+https://streamlit.io/
+
+2. Documentacao do Streamlit
+https://docs.streamlit.io/
+
+3. Pybind11
+https://pybind11.readthedocs.io/en/stable/
+
+4. CMake
+https://cmake.org/
+
+5. GitHub Codespaces
+https://docs.github.com/codespaces
+
+6. Dev Containers para VS Code
+https://code.visualstudio.com/docs/devcontainers/containers
+
+7. Exemplo citado no enunciado da atividade
+https://buscaheuristica-ss6e7h4iks82xh9ytux9p3.streamlit.app/
+
+8. Loom, sugestao de ferramenta para gravacao do video
+https://www.loom.com/
