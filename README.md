@@ -53,11 +53,8 @@ interactive-data-structures-simulator/
 ├── tests/test_core.py              # Testes automatizados
 ├── scripts/
 │   ├── build.sh                    # Compila o modulo C++
-│   └── run.sh                      # Compila se necessario e inicia Streamlit
-├── .devcontainer/                  # Configuracao para GitHub Codespaces
-└── docs/
-    ├── links.txt                   # Links a entregar no SIGAA
-    └── demo_video_script.md        # Roteiro de video de ate 3 minutos
+│   └── run.sh                      # Compila se necessario e inicia Streamlit                
+└── .devcontainer/                  # Configuracao para GitHub Codespaces
 ```
 
 ## Execucao manual em Linux ou macOS
@@ -113,15 +110,4 @@ Os testes abrangem comportamento LIFO da pilha, FIFO da fila, insercao e remocao
 - CMake 3.20 ou superior
 - Dependencias Python em `requirements.txt`
 
-## Entrega da atividade
 
-Antes da submissao, verifique:
-
-- Repositorio Git com o codigo-fonte completo.
-- README com instrucoes de instalacao e execucao.
-- Video curto de demonstracao. O roteiro esta em `docs/demo_video_script.md`.
-- Arquivo de links em `docs/links.txt`.
-
-## Licenca
-
-Uso educacional para a disciplina PCO001.
